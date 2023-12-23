@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import TheWelcome from '../components/TheWelcome.vue'
+import HabitsListVue from '@/components/HabitsList.vue';
+
 </script>
 
 <template>
   <main>
-    <TheWelcome />
+    <HabitsListVue />
   </main>
 </template>

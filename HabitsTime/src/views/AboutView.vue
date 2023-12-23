@@ -1,6 +1,6 @@
 <template>
   <div class="about">
-    <h1>This is an about page</h1>
+    <h1>This application was built for personal interest by me, Claesen Maties.</h1>
   </div>
 </template>
 
