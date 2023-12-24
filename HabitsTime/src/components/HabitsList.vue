@@ -3,9 +3,12 @@ import Airtable, { Record } from 'airtable';
 import PlusIcon from '@/assets/icons/PlusIcon.vue';
 import DeleteIcon from '@/assets/icons/DeleteIcon.vue';
 import * as relativeTime from 'dayjs/plugin/relativeTime';
+import * as utc from 'dayjs/plugin/utc';
 // @ts-ignore
 import dayjs from 'dayjs';
-dayjs.extend(relativeTime);
+dayjs.extend(relativeTime as any);
+dayjs.extend(utc as any)
+
 
 const AIRTABLE_API_KEY = 'patMtyHTX78FSOzP8.cb5f2d6a899eed97709134d7d08347cafdaa013bf0923cfd3a8884f6c201b83e'
 const AIRTABLE_BASE_ID = 'app1wUc5fIsAE3v2x'
@@ -14,7 +17,7 @@ const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
 type Habit = {
     id: string; // airtable generated id
     name: string;
-    lastDone: dayjs.Dayjs;
+    lastDone: Date;
 };
 
 export default {
@@ -27,7 +30,7 @@ export default {
     data() {
         return {
             localName: '',
-            localLastDone: Date(),
+            localLastDone: '',
             lastDoneId: '',
             changed: false,
             habits: [] as Array<Habit>,
@@ -36,23 +39,24 @@ export default {
         };
     },
     methods: {
-        pushToHabits(records: Array<Record<Habit>>) {
-            records.forEach((record: Record<Habit>) => {
+        pushToHabits(records: Array<Record<any>>) {
+            records.forEach((record: Record<any>) => {
                 const habit: Habit = {
                     id: record.id,
                     name: record.get('name'),
-                    lastDone: dayjs(record.get('lastDone'))
+                    lastDone: record.get('lastDone'),
                 };
                 this.habits.push(habit);
             });
             this.sortHabits();
+            this.doneLoading = true;
         },
         // sort habits by last done from newest to oldest
         sortHabits() {
             this.habits.sort((a, b) => {
-                if (a.lastDone.isBefore(b.lastDone)) {
+                if (dayjs(a.lastDone).isBefore(b.lastDone)) {
                     return 1;
-                } else if (a.lastDone.isAfter(b.lastDone)) {
+                } else if (dayjs(a.lastDone).isAfter(b.lastDone)) {
                     return -1;
                 } else {
                     return 0;
@@ -69,7 +73,6 @@ export default {
                 this.pushToHabits(records);
                 fetchNextPage();
             });
-            this.doneLoading = true;
         },
         getLocalHabitById(id: string): Habit | undefined {
             return this.habits.find(habit => habit.id === id);
@@ -81,7 +84,7 @@ export default {
                     // @ts-ignore
                     fields: {
                         name: 'New Habit',
-                        lastDone: dayjs(),
+                        lastDone: new Date().toISOString(),
                     }
                 },
             ], (err: any, records: any) => {
@@ -99,11 +102,10 @@ export default {
                 this.changed = true;
             }
         },
-        updatedLastDone(event: any) {
-            if (event.target.value !== this.localLastDone) {
-                this.localLastDone = event.target.value;
-                this.changed = true;
-            }
+        updatedLastDone(event: any, habit: Habit) {
+            habit.lastDone = event.target.value;
+            this.changed = true;
+            this.updateHabit(habit.id);
         },
         updateHabit(id: string) {
             // get local habit
@@ -118,10 +120,10 @@ export default {
                     // @ts-ignore
                     fields: {
                         name: localHabit.name,
-                        lastDone: localHabit.lastDone,
+                        lastDone: dayjs(localHabit.lastDone).toISOString(),
                     }
                 },
-            ], (err: any, records: any) => {
+            ], (err: any, _records: any) => {
                 if (err) {
                     console.error(err);
                     return;
@@ -131,11 +133,18 @@ export default {
         },
         lastDoneClicked(id: string) {
             const datepickers: Array<HTMLInputElement> = this.$refs['datetime-' + id] as Array<HTMLInputElement>;
-            if (datepickers.length === 0)
-                return;
-            const datepicker = datepickers[0];
-            datepicker.showPicker();
+            const localHabit = this.getLocalHabitById(id)
+            if (datepickers.length === 0 || localHabit === undefined)
+            return;
+            this.localLastDone = dayjs(localHabit.lastDone).utc().format().slice(0, -1);
             this.lastDoneId = id;
+
+            const datepicker = datepickers[0];
+
+            // delay because localLastDone is not set yet otherwise
+            setTimeout(() => {
+                datepicker.showPicker();
+            }, 100);
         },
         lastDoneFromNow(habit: Habit) {
             return dayjs(habit.lastDone).fromNow();
@@ -159,7 +168,7 @@ export default {
                 let localHabit: Habit | undefined = this.getLocalHabitById(id);
                 if (localHabit === undefined)
                     return;
-                localHabit.lastDone = dayjs();
+                localHabit.lastDone = new Date();
                 this.changed = true;
                 this.updateHabit(id);
             }, 0.5 * 1000);
@@ -168,16 +177,16 @@ export default {
             clearTimeout(this.longPressTimer);
         },
     },
-    watch: {
-        localLastDone(newv) {
-            this.updateHabit(this.lastDoneId);
-        }
-    }
 };
 </script>
 
 <template>
     <div class="d-flex justify-content-center">
+        <div v-if="!doneLoading">
+            <div class="spinner-grow spinner" style="width: 3rem; height: 3rem; margin-top: 5rem;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
         <div v-if="doneLoading" class="list-group">
             <div v-for="habit in habits">
                 <a href="#" class="list-group-item list-group-item-action" aria-current="true"
@@ -186,7 +195,8 @@ export default {
                         <input class="name" type="text" v-model="habit.name" @change="updatedName"
                             @blur="updateHabit(habit.id)" />
                         <small class="last-done" @click="lastDoneClicked(habit.id)">{{ lastDoneFromNow(habit) }}
-                            <input type="datetime-local" v-model="habit.lastDone" @change="updatedLastDone" style="visibility: hidden; width: 0;" :ref="'datetime-'+habit.id"/>
+                            <input type="datetime-local" :value="localLastDone" @change="(event) => updatedLastDone(event, habit)"
+                                style="visibility: hidden; width: 0;" :ref="'datetime-' + habit.id" />
                         </small>
                         <button class="delete-button" @click="deleteHabit(habit.id)">
                             <DeleteIcon />
@@ -202,6 +212,10 @@ export default {
 </template>
 
 <style scoped>
+
+.spinner {
+    color: var(--jonquil);
+}
 .list-group-item {
     margin: 0.5rem 0 0 0 !important;
     width: 60vw;
