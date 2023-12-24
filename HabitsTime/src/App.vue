@@ -4,9 +4,9 @@ import { RouterLink, RouterView } from 'vue-router'
 
 <template>
   <header>
-    <div class="wrapper">
+    <div class="background-nav">
       <!-- As a link -->
-      <nav class="navbar bg-body-tertiary">
+      <nav class="navbar">
         <div class="container-fluid">
           <a class="navbar-brand" href="#">Habits</a>
           <div class="d-flex justify-content-end">
@@ -25,5 +25,10 @@ import { RouterLink, RouterView } from 'vue-router'
 .RouterLink {
   text-decoration: none;
   margin-left: 1rem;
+  color: black;
+}
+
+.background-nav {
+  background-color: var(--jonquil) !important;
 }
 </style>

@@ -26,7 +26,9 @@ export default {
     },
     data() {
         return {
-            locallyChangedName: '',
+            localName: '',
+            localLastDone: Date(),
+            lastDoneId: '',
             changed: false,
             habits: [] as Array<Habit>,
             doneLoading: false,
@@ -72,7 +74,7 @@ export default {
         getLocalHabitById(id: string): Habit | undefined {
             return this.habits.find(habit => habit.id === id);
         },
-        addHabitToAirtable() {
+        createHabit() {
             // add a new habit to airtable
             base('Habits').create([
                 {
@@ -91,12 +93,19 @@ export default {
                 this.pushToHabits(records);
             });
         },
-        storeLocalChanges(event: any) {
-            if (event.target.value === this.locallyChangedName)
-                this.locallyChangedName = event.target.value;
-            this.changed = true;
+        updatedName(event: any) {
+            if (event.target.value !== this.localName) {
+                this.localName = event.target.value;
+                this.changed = true;
+            }
         },
-        updateHabitToAirtable(id: string) {
+        updatedLastDone(event: any) {
+            if (event.target.value !== this.localLastDone) {
+                this.localLastDone = event.target.value;
+                this.changed = true;
+            }
+        },
+        updateHabit(id: string) {
             // get local habit
             const localHabit = this.getLocalHabitById(id);
             if (!this.changed || localHabit === undefined)
@@ -118,6 +127,18 @@ export default {
                     return;
                 }
             });
+            this.sortHabits();
+        },
+        lastDoneClicked(id: string) {
+            const datepickers: Array<HTMLInputElement> = this.$refs['datetime-' + id] as Array<HTMLInputElement>;
+            if (datepickers.length === 0)
+                return;
+            const datepicker = datepickers[0];
+            datepicker.showPicker();
+            this.lastDoneId = id;
+        },
+        lastDoneFromNow(habit: Habit) {
+            return dayjs(habit.lastDone).fromNow();
         },
         deleteHabit(id: string) {
             // delete a habit in airtable
@@ -140,13 +161,18 @@ export default {
                     return;
                 localHabit.lastDone = dayjs();
                 this.changed = true;
-                this.updateHabitToAirtable(id);
+                this.updateHabit(id);
             }, 0.5 * 1000);
         },
         endLongPress() {
             clearTimeout(this.longPressTimer);
         },
     },
+    watch: {
+        localLastDone(newv) {
+            this.updateHabit(this.lastDoneId);
+        }
+    }
 };
 </script>
 
@@ -157,16 +183,18 @@ export default {
                 <a href="#" class="list-group-item list-group-item-action" aria-current="true"
                     @mousedown="startLongPress(habit.id)" @mouseup="endLongPress()" @mouseleave="endLongPress()">
                     <div class="d-flex w-100 justify-content-between">
-                        <input class="name" type="text" v-model="habit.name" @change="storeLocalChanges"
-                            @blur="updateHabitToAirtable(habit.id)" />
-                        <small class="last-done">{{ habit.lastDone.fromNow() }}</small>
+                        <input class="name" type="text" v-model="habit.name" @change="updatedName"
+                            @blur="updateHabit(habit.id)" />
+                        <small class="last-done" @click="lastDoneClicked(habit.id)">{{ lastDoneFromNow(habit) }}
+                            <input type="datetime-local" v-model="habit.lastDone" @change="updatedLastDone" style="visibility: hidden; width: 0;" :ref="'datetime-'+habit.id"/>
+                        </small>
                         <button class="delete-button" @click="deleteHabit(habit.id)">
                             <DeleteIcon />
                         </button>
                     </div>
                 </a>
             </div>
-            <button class="add-button" @click="addHabitToAirtable()">
+            <button class="add-button" @click="createHabit()">
                 <PlusIcon />
             </button>
         </div>
@@ -176,7 +204,7 @@ export default {
 <style scoped>
 .list-group-item {
     margin: 0.5rem 0 0 0 !important;
-    width: 400px;
+    width: 60vw;
     border-radius: 40px !important;
 
     @media(max-width: 750px) {
@@ -189,7 +217,7 @@ export default {
     height: 50px;
     width: 50px;
     border-radius: 50px;
-    background-color: #d3d3d3;
+    background-color: var(--jonquil);
     color: white;
     display: flex;
     align-items: center;
@@ -199,8 +227,8 @@ export default {
     cursor: pointer;
     padding: 0.7rem;
 
-    margin-top: 0.5rem;
-    margin-left: 180px;
+    margin-top: 3rem;
+    margin-left: 50%;
 
     @media(max-width: 750px) {
         position: fixed;
@@ -220,8 +248,11 @@ export default {
 }
 
 .name {
+    padding: 0.2rem 0 0.2rem 0;
+    text-align: center;
     border: none;
-    background-color: transparent;
+    border-radius: 30px;
+    background-color: var(--jonquil);
 }
 
 .name:focus {
